@@ -155,17 +155,15 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 export const generatorCost = (def: GeneratorDef, owned: number) =>
   Math.ceil(def.baseCost * Math.pow(1.15, owned));
 
-function formatNumberStatic(n: number): string {
-  return formatNumber(n);
-}
-
-export const formatNumber = (n: number): string => {
+export function formatNumber(n: number): string {
   if (n < 1000) return n.toFixed(n < 10 && n % 1 !== 0 ? 1 : 0);
   const units = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
   let i = 0;
   while (n >= 1000 && i < units.length - 1) { n /= 1000; i++; }
   return n.toFixed(2) + units[i];
-};
+}
+
+const formatNumberStatic = formatNumber;
 
 // Dark Matter (prestige) helpers — Cookie Clicker-style cube-root curve
 export const darkMatterFor = (totalEarned: number) => {

@@ -109,7 +109,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   ...stardustTiers.map((t) => ({
     id: `dust-${t.n}`,
     name: t.name,
-    desc: `Earn ${formatNumberStatic(t.n)} stardust total.`,
+    desc: `Earn ${formatNumber(t.n)} stardust total.`,
     icon: t.icon,
     check: (s: import('./useGame').GameState) => s.totalEarned >= t.n,
   })),
@@ -163,7 +163,6 @@ export function formatNumber(n: number): string {
   return n.toFixed(2) + units[i];
 }
 
-const formatNumberStatic = formatNumber;
 
 // Dark Matter (prestige) helpers — Cookie Clicker-style cube-root curve
 export const darkMatterFor = (totalEarned: number) => {

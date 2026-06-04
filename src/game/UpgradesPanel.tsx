@@ -8,34 +8,47 @@ export function UpgradesPanel({
   state: GameState;
   onBuy: (u: (typeof UPGRADES)[number]) => void;
 }) {
-  const visible = UPGRADES.filter((u) => isUpgradeVisible(state, u));
+  const visible = UPGRADES.filter((u) => isUpgradeVisible(state, u)).sort((a, b) => a.cost - b.cost);
+  const affordable = visible.filter((u) => state.stardust >= u.cost);
+  const next = visible.filter((u) => state.stardust < u.cost).slice(0, 6);
+  const list = [...affordable, ...next];
   return (
     <div className="flex flex-col gap-2">
-      <h2 className="px-1 text-xs uppercase tracking-[0.3em] text-muted-foreground">
-        Upgrades {visible.length > 0 && <span className="text-[color:var(--nebula-pink)]">· {visible.length} available</span>}
-      </h2>
-      {visible.length === 0 && (
-        <p className="glass-panel rounded-xl p-4 text-center text-sm text-muted-foreground">
-          No upgrades available yet. Buy more generators to unlock them.
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Upgrades</h2>
+        <span className="text-xs text-[color:var(--nebula-pink)]">
+          {affordable.length} ready · {visible.length} unlocked
+        </span>
+      </div>
+      {list.length === 0 && (
+        <p className="rounded-xl border border-white/5 bg-black/20 p-4 text-center text-sm text-muted-foreground">
+          Buy more generators to unlock upgrades.
         </p>
       )}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {visible.slice(0, 8).map((u) => {
+      <div className="grid grid-cols-1 gap-1.5">
+        {list.map((u) => {
           const canAfford = state.stardust >= u.cost;
           return (
             <button
               key={u.id}
               disabled={!canAfford}
               onClick={() => onBuy(u)}
-              className="glass-panel group flex flex-col gap-1 rounded-xl p-3 text-left transition-all enabled:hover:border-[color:var(--nebula-pink)] disabled:cursor-not-allowed disabled:opacity-50"
+              className={
+                'group flex items-center gap-2 rounded-lg border p-2 text-left transition-all ' +
+                (canAfford
+                  ? 'border-[color:var(--nebula-pink)]/40 bg-[oklch(0.3_0.12_330/0.25)] hover:bg-[oklch(0.35_0.16_330/0.4)] cursor-pointer'
+                  : 'border-white/5 bg-black/30 opacity-50 cursor-not-allowed')
+              }
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-semibold">{u.name}</span>
-                <span className="shrink-0 text-xs font-bold text-[color:var(--nebula-pink)]">
-                  {formatNumber(u.cost)}
-                </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold">{u.name}</span>
+                  <span className="shrink-0 text-xs font-bold text-[color:var(--nebula-pink)] tabular-nums">
+                    {formatNumber(u.cost)}
+                  </span>
+                </div>
+                <p className="truncate text-[11px] text-muted-foreground">{u.desc}</p>
               </div>
-              <p className="text-xs text-muted-foreground">{u.desc}</p>
             </button>
           );
         })}

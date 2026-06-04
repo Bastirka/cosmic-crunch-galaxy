@@ -128,9 +128,7 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
   return (
     <div className="flex flex-col items-end leading-tight">
       <span className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground">{label}</span>
-      <span className="font-bold tabular-nums" style={{ color: `var(--${''}, ${color})`, color: color as string }}>
-        {value}
-      </span>
+      <span className="font-bold tabular-nums" style={{ color }}>{value}</span>
     </div>
   );
 }

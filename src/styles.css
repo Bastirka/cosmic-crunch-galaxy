@@ -149,5 +149,52 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    background-image: var(--gradient-cosmos);
+    background-attachment: fixed;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    overflow-x: hidden;
   }
+}
+
+@keyframes star-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.03); filter: brightness(1.15); }
+}
+@keyframes star-rotate {
+  to { transform: rotate(360deg); }
+}
+@keyframes float-up {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -120px) scale(1.4); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(var(--orbit-r)) rotate(-360deg); }
+}
+
+.star-button {
+  background: var(--gradient-star);
+  box-shadow: var(--shadow-star);
+  animation: star-pulse 3s ease-in-out infinite;
+}
+.star-button::before {
+  content: '';
+  position: absolute; inset: -20%;
+  background: conic-gradient(from 0deg, transparent, oklch(0.9 0.2 80 / 0.4), transparent, oklch(0.8 0.22 40 / 0.3), transparent);
+  border-radius: 50%;
+  animation: star-rotate 12s linear infinite;
+  z-index: -1;
+  filter: blur(8px);
+}
+.float-num { animation: float-up 1.2s ease-out forwards; }
+.twinkle { animation: twinkle 3s ease-in-out infinite; }
+.glass-panel {
+  background: oklch(0.2 0.05 275 / 0.55);
+  backdrop-filter: blur(20px);
+  border: 1px solid oklch(0.5 0.1 280 / 0.25);
+  box-shadow: var(--shadow-card);
 }

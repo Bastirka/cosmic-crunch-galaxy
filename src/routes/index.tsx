@@ -1,14 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useGame, computeCps, computeClickPower } from "../game/useGame";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useGame, computeCps, computeClickPower, isUpgradeVisible } from "../game/useGame";
 import { Starfield } from "../game/Starfield";
 import { StarClicker } from "../game/StarClicker";
-import { GeneratorsPanel } from "../game/GeneratorsPanel";
-import { UpgradesPanel } from "../game/UpgradesPanel";
-import { AchievementsPanel } from "../game/AchievementsPanel";
-import { StatsPanel } from "../game/StatsPanel";
+import { QuestsPanel } from "../game/QuestsPanel";
+import { AscensionPanel } from "../game/AscensionPanel";
+import { applyEquippedCosmetics } from "../game/cosmetics";
 import { GoldenStar } from "../game/GoldenStar";
-import { formatNumber } from "../game/data";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { RandomEventOverlay, CosmicStormIndicator } from "../game/RandomEventsUI";
+import { LoginModal } from "../game/LoginModal";
+import { formatNumber, darkMatterFor, UPGRADES } from "../game/data";
+import { getDailyStatus } from "../game/daily";
+import { computeGalaxyCps, getActiveGalaxyObject, getGalaxyUnlockProgress, galaxyDef } from "../game/galaxy";
+import { calculateBuffMultipliers } from "../game/buffs";
+import { TopBar } from "../game/ui/TopBar";
+import { BuffBar } from "../game/ui/BuffBar";
+import { BottomNav, type NavItem } from "../game/ui/BottomNav";
+import { LeftDock } from "../game/ui/LeftDock";
+import { GameModal } from "../game/ui/GameModal";
+import { ShopUpgradesModal } from "../game/ui/ShopUpgradesModal";
+import { AwardsRanksModal } from "../game/ui/AwardsRanksModal";
+import { GalaxyMapModal } from "../game/ui/GalaxyMapModal";
+import { SettingsModal } from "../game/ui/SettingsModal";
+import { StarSelector } from "../game/ui/StarShop";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -22,10 +37,84 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
+/**
+ * Five balanced dock slots. Single systems (Quests, Ascend) sit on the left;
+ * the grouped/merged sections (Shop+Upgrades, Awards+Ranks, Settings) sit on
+ * the right.
+ */
+type ModalKey = "quests" | "ascension" | "shop" | "awards" | "settings" | "galaxy";
+
+const NAV_META: { key: ModalKey; icon: string; label: string }[] = [
+  { key: "quests", icon: "🎯", label: "Quests" },
+  { key: "ascension", icon: "🌌", label: "Ascend" },
+  { key: "shop", icon: "🪐", label: "Shop" },
+  { key: "awards", icon: "🏆", label: "Awards" },
+  { key: "settings", icon: "⚙️", label: "Settings" },
+];
+
 function Index() {
-  const { state, click, buyGenerator, buyUpgrade, claimGolden, ascend, reset } = useGame();
-  const cps = computeCps(state);
-  const power = computeClickPower(state);
+  const {
+    state, click, buyGenerator, buyUpgrade, claimGolden, ascend, reset,
+    saveStatus, offlineEarned, dismissOffline, claimDaily, randomEvent,
+    collectRandomEvent, claimQuestReward, equipCosmetic, soundSettings,
+    updateSoundSettings, leaderboardPaused,
+    switchGalaxyObject, unlockGalaxyObject, buyGalaxyGenerator, buyGalaxyUpgrade,
+  } = useGame();
+  const activeObject = getActiveGalaxyObject(state);
+  const activeObjectDef = galaxyDef(activeObject.id);
+  const nextUnlock = getGalaxyUnlockProgress(state);
+  // Combined CPS includes every star's production (all of it waterfalls into
+  // the single stardust pool) and the centralized buff multipliers; click power
+  // stays Star 1's own × the buff click multiplier.
+  const buffM = calculateBuffMultipliers(state);
+  const cps = computeGalaxyCps(state, computeCps(state)) * buffM.cps;
+  const power = computeClickPower(state) * buffM.click;
+  const cosmetic = applyEquippedCosmetics(state);
+  const multiStar = state.galaxy.objects.some((o) => o.unlocked && o.id !== "solar_core");
+
+  // Single source of truth for which system panel is open.
+  const [activeModal, setActiveModal] = useState<ModalKey | null>(null);
+  const close = () => setActiveModal(null);
+
+  // "While you were away…" notification.
+  const offlineShown = useRef(false);
+  useEffect(() => {
+    if (offlineEarned && offlineEarned.earnings > 0 && !offlineShown.current) {
+      offlineShown.current = true;
+      toast(`Welcome back! ✨`, {
+        description: `While you were away, you earned ${formatNumber(offlineEarned.earnings)} stardust.`,
+        duration: 6000,
+      });
+      dismissOffline();
+    }
+  }, [offlineEarned, dismissOffline]);
+
+  const galaxyUnlockShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!nextUnlock || nextUnlock.object.unlocked || !nextUnlock.ready) return;
+    if (galaxyUnlockShown.current === nextUnlock.object.id) return;
+    galaxyUnlockShown.current = nextUnlock.object.id;
+    toast(`${nextUnlock.object.name} is ready to unlock!`, {
+      description: "Open Galaxy Map to claim the next layer.",
+      duration: 5000,
+    });
+  }, [nextUnlock]);
+
+  // ── Attention badges (a dot on the nav icon when something is ready) ──────
+  const dailyReady = getDailyStatus(state.dailyRewards).canClaim;
+  const badges: Partial<Record<ModalKey, boolean>> = {
+    quests: state.quests.active_quests.some((q) => q.completed && !q.claimed),
+    ascension: darkMatterFor(state.totalEarned) > 0,
+    shop: UPGRADES.some((u) => isUpgradeVisible(state, u) && state.stardust >= u.cost),
+    settings: dailyReady, // Daily now lives inside Settings
+  };
+
+  const navItems: NavItem[] = NAV_META.map((m) => ({
+    key: m.key,
+    icon: m.icon,
+    label: m.label,
+    badge: badges[m.key],
+  }));
 
   return (
     <>
@@ -35,100 +124,166 @@ function Index() {
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Orbitron:wght@600;800;900&display=swap"
         rel="stylesheet"
       />
+      {/* Equipped background theme (visual only, behind the starfield) */}
+      {cosmetic.background?.visual.css && (
+        <div className="pointer-events-none fixed inset-0 z-0" style={{ background: cosmetic.background.visual.css }} />
+      )}
       <Starfield />
       <GoldenStar state={state} onClaim={claimGolden} />
+      <RandomEventOverlay event={randomEvent} onCollect={collectRandomEvent} />
+      <CosmicStormIndicator state={state} />
 
-      {/* Top bar */}
-      <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-baseline gap-3">
-            <h1
-              className="bg-gradient-to-r from-[color:var(--nebula-cyan)] via-[color:var(--star-core)] to-[color:var(--nebula-pink)] bg-clip-text text-xl font-black uppercase tracking-[0.15em] text-transparent sm:text-2xl"
-              style={{ fontFamily: "'Orbitron', sans-serif" }}
-            >
-              Cosmic Crunch
-            </h1>
-            <span className="hidden text-[10px] uppercase tracking-[0.3em] text-muted-foreground sm:inline">
-              Harvest the cosmos
-            </span>
+      {/* Top HUD */}
+      <TopBar
+        stardust={state.stardust}
+        cps={cps}
+        power={power}
+        darkMatter={state.darkMatter ?? 0}
+        saveStatus={saveStatus}
+        badge={cosmetic.badge ? { icon: cosmetic.badge.visual.icon ?? "★", name: cosmetic.badge.name } : null}
+      />
+      <LoginModal />
+
+      {/* Active buffs + synergies HUD (collapsible on mobile) */}
+      <BuffBar state={state} />
+
+      {/* Center stage — the clicker is the focus. Left padding (desktop) clears
+          the vertical dock so the star stays centred and uncovered. */}
+      <main className="safe-x relative z-10 flex min-h-[calc(100dvh-6rem)] flex-col items-center justify-center gap-6 px-4 pb-36 pt-4 lg:pb-10 lg:pl-24">
+        <div className="text-center">
+          <div className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">Stardust</div>
+          <div
+            className="my-1 text-5xl font-black tabular-nums text-[color:var(--star-core)] sm:text-6xl md:text-7xl"
+            style={{ fontFamily: "'Orbitron', sans-serif", textShadow: "0 0 36px oklch(0.85 0.22 70 / 0.6)" }}
+          >
+            {formatNumber(state.stardust)}
           </div>
-          <div className="flex items-center gap-4 text-xs">
-            <Stat label="CPS" value={formatNumber(cps)} color="var(--nebula-cyan)" />
-            <Stat label="Click" value={formatNumber(power)} color="var(--star-core)" />
-            {(state.darkMatter ?? 0) > 0 && (
-              <Stat label="DM" value={`${state.darkMatter}`} color="var(--nebula-pink)" />
+          <div className="text-xs text-muted-foreground">
+            <span className="text-[color:var(--nebula-cyan)]">{formatNumber(cps)}</span>/s ·{" "}
+            <span className="text-foreground">{state.totalClicks.toLocaleString()}</span> clicks
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-foreground">
+              Active: {activeObject.name}
+            </span>
+            {nextUnlock ? (
+              <span className="rounded-full border border-[color:var(--nebula-cyan)]/20 bg-[oklch(0.2_0.08_200/0.25)] px-3 py-1 text-[color:var(--nebula-cyan)]">
+                Next: {nextUnlock.object.name} at {formatNumber(nextUnlock.target)}
+              </span>
+            ) : (
+              <span className="rounded-full border border-[color:var(--nebula-pink)]/20 bg-[oklch(0.25_0.08_330/0.2)] px-3 py-1 text-[color:var(--nebula-pink)]">
+                Galaxy complete
+              </span>
             )}
             <button
-              onClick={reset}
-              className="ml-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50 transition-colors hover:text-destructive"
+              onClick={() => setActiveModal("galaxy")}
+              className="rounded-full border border-[color:var(--nebula-pink)]/30 bg-[oklch(0.35_0.14_330/0.3)] px-3 py-1 font-semibold text-[color:var(--nebula-pink)] transition hover:bg-[oklch(0.42_0.18_330/0.45)]"
             >
-              Reset
+              Galaxy Map
             </button>
           </div>
+          {nextUnlock && (
+            <div className="mx-auto mt-3 w-full max-w-md">
+              <div className="mb-1 flex items-baseline justify-between text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span>Next unlock</span>
+                <span className="text-[color:var(--nebula-cyan)]">
+                  {formatNumber(nextUnlock.current)} / {formatNumber(nextUnlock.target)}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-black/40">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${nextUnlock.ratio * 100}%`, background: 'linear-gradient(90deg, var(--nebula-cyan), var(--nebula-pink))' }}
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {nextUnlock.object.name} unlocks at {nextUnlock.def.unlockText.toLowerCase()}.
+              </p>
+            </div>
+          )}
         </div>
-      </header>
 
-      {/* Main grid */}
-      <main className="relative z-10 mx-auto grid max-w-[1500px] grid-cols-1 gap-4 px-4 py-6 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
-        {/* Left column */}
-        <aside className="flex flex-col gap-4 lg:order-1">
-          <section className="glass-panel rounded-2xl p-4">
-            <StatsPanel state={state} onAscend={ascend} />
-          </section>
-          <section className="glass-panel rounded-2xl p-4">
-            <AchievementsPanel state={state} />
-          </section>
-        </aside>
+        {/* Active-star selector (only once a second star exists) */}
+        {multiStar && <StarSelector state={state} onSwitch={switchGalaxyObject} />}
 
-        {/* Center column — clicker */}
-        <section className="flex flex-col items-center justify-start gap-6 lg:order-2">
-          <div className="glass-panel w-full max-w-md rounded-2xl px-6 py-5 text-center">
-            <div className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground">Stardust</div>
-            <div
-              className="my-1 text-5xl font-black tabular-nums text-[color:var(--star-core)] md:text-6xl"
-              style={{
-                fontFamily: "'Orbitron', sans-serif",
-                textShadow: '0 0 30px oklch(0.85 0.22 70 / 0.6)',
-              }}
-            >
-              {formatNumber(state.stardust)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <span className="text-[color:var(--nebula-cyan)]">{formatNumber(cps)}</span>/s ·{' '}
-              <span className="text-foreground">{state.totalClicks.toLocaleString()}</span> clicks
-            </div>
-          </div>
-
-          <StarClicker onClick={click} power={power} />
-        </section>
-
-        {/* Right column — tabbed shop */}
-        <aside className="glass-panel flex flex-col rounded-2xl p-4 lg:order-3 lg:max-h-[calc(100vh-7rem)] lg:sticky lg:top-4">
-          <Tabs defaultValue="generators" className="flex h-full flex-col">
-            <TabsList className="w-full bg-black/30">
-              <TabsTrigger value="generators" className="flex-1">Generators</TabsTrigger>
-              <TabsTrigger value="upgrades" className="flex-1">
-                Upgrades
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="generators" className="mt-3 flex-1 overflow-y-auto pr-1">
-              <GeneratorsPanel state={state} onBuy={buyGenerator} />
-            </TabsContent>
-            <TabsContent value="upgrades" className="mt-3 flex-1 overflow-y-auto pr-1">
-              <UpgradesPanel state={state} onBuy={buyUpgrade} />
-            </TabsContent>
-          </Tabs>
-        </aside>
+        <StarClicker
+          onClick={click}
+          power={power}
+          planetGradient={cosmetic.planet?.visual.gradient ?? activeObjectDef?.visual.gradient}
+          glowShadow={cosmetic.glow?.visual.shadow ?? activeObjectDef?.visual.glow}
+          particleColor={cosmetic.particle?.visual.color}
+          particleIcon={cosmetic.particle?.visual.icon ?? activeObjectDef?.visual.icon}
+          centerIcon={activeObjectDef?.visual.icon}
+        />
       </main>
-    </>
-  );
-}
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="flex flex-col items-end leading-tight">
-      <span className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground">{label}</span>
-      <span className="font-bold tabular-nums" style={{ color }}>{value}</span>
-    </div>
+      {/* Navigation — vertical left dock on desktop, bottom dock on mobile */}
+      <div className="hidden lg:block">
+        <LeftDock
+          items={navItems}
+          active={activeModal}
+          onSelect={(key) => setActiveModal((cur) => (cur === key ? null : (key as ModalKey)))}
+        />
+      </div>
+      <div className="lg:hidden">
+        <BottomNav
+          items={navItems}
+          active={activeModal}
+          onSelect={(key) => setActiveModal((cur) => (cur === key ? null : (key as ModalKey)))}
+        />
+      </div>
+
+      {/* ── System panels (one open at a time) ─────────────────────────────── */}
+      <GameModal open={activeModal === "quests"} onOpenChange={(o) => !o && close()} title="Quests" subtitle="Complete goals for rewards" accent="var(--star-core)">
+        <QuestsPanel quests={state.quests} onClaim={claimQuestReward} />
+      </GameModal>
+
+      <GameModal open={activeModal === "ascension"} onOpenChange={(o) => !o && close()} title="Ascension" subtitle="Reset your run for permanent Dark Matter" accent="var(--nebula-pink)">
+        <AscensionPanel state={state} onAscend={ascend} />
+      </GameModal>
+
+      {/* Merged: Shop (Generators) + Upgrades + multi-star expansion */}
+      <ShopUpgradesModal
+        open={activeModal === "shop"}
+        onOpenChange={(o) => !o && close()}
+        state={state}
+        onBuyGenerator={buyGenerator}
+        onBuyUpgrade={buyUpgrade}
+        onSwitchStar={switchGalaxyObject}
+        onBuyNewStar={unlockGalaxyObject}
+        onBuyStarGenerator={buyGalaxyGenerator}
+        onBuyStarUpgrade={buyGalaxyUpgrade}
+      />
+
+      {/* Merged: Awards (Achievements) + Ranks (Leaderboard) */}
+      <AwardsRanksModal
+        open={activeModal === "awards"}
+        onOpenChange={(o) => !o && close()}
+        state={state}
+        leaderboardPaused={leaderboardPaused}
+      />
+
+      {/* Settings hub: Daily · Sound · Stats · Account · Looks */}
+      <SettingsModal
+        open={activeModal === "settings"}
+        onOpenChange={(o) => !o && close()}
+        state={state}
+        onClaimDaily={claimDaily}
+        soundSettings={soundSettings}
+        onChangeSound={updateSoundSettings}
+        onEquipCosmetic={equipCosmetic}
+        saveStatus={saveStatus}
+        onReset={reset}
+        dailyBadge={dailyReady}
+      />
+
+      <GalaxyMapModal
+        open={activeModal === "galaxy"}
+        onOpenChange={(o) => !o && close()}
+        state={state}
+        onSwitchObject={switchGalaxyObject}
+        onUnlockObject={unlockGalaxyObject}
+      />
+    </>
   );
 }

@@ -146,6 +146,11 @@
     border-color: var(--color-border);
   }
 
+  html {
+    /* Avoid iOS tap-to-zoom delay & let us own touch gestures. */
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -153,7 +158,43 @@
     background-attachment: fixed;
     font-family: 'Space Grotesk', system-ui, sans-serif;
     overflow-x: hidden;
+    /* Prevent the page from rubber-band scrolling sideways on phones. */
+    max-width: 100vw;
   }
+
+  /* Interactive elements get fast, no-zoom taps and no blue tap highlight. */
+  button, a, [role="button"], input[type="range"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ── Mobile helpers ──────────────────────────────────────────────────────── */
+/* Safe-area padding for notches / home indicators / browser chrome. */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Reduced-animation mode: honoured automatically by the OS setting, and also
+   forced via the .reduce-motion class on low-end / opted-out devices. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+.reduce-motion .star-button,
+.reduce-motion .star-button::before,
+.reduce-motion .golden-star,
+.reduce-motion .golden-star::before,
+.reduce-motion .twinkle,
+.reduce-motion .animate-pulse,
+.reduce-motion .animate-ping {
+  animation: none !important;
 }
 
 @keyframes star-pulse {

@@ -150,6 +150,13 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     icon: '🕉️',
     check: (s) => (s.ascensions ?? 0) >= 1,
   },
+  {
+    id: 'ancient-seal',
+    name: 'Ancient Seal',
+    desc: 'Catch 25 golden stars and ascend 3 times.',
+    icon: '🗝️',
+    check: (s) => (s.goldenClicks ?? 0) >= 25 && (s.ascensions ?? 0) >= 3,
+  },
 ];
 
 export const generatorCost = (def: GeneratorDef, owned: number) =>
@@ -164,10 +171,15 @@ export function formatNumber(n: number): string {
 }
 
 
-// Dark Matter (prestige) helpers — Cookie Clicker-style cube-root curve
+// Dark Matter (prestige): darkMatterGain = floor(sqrt(total_earned / 1,000,000))
+//   1M earned = 1 DM, 4M = 2 DM, 9M = 3 DM, 100M = 10 DM …
+export const ASCEND_THRESHOLD = 1_000_000;
+
 export const darkMatterFor = (totalEarned: number) => {
-  if (totalEarned < 1e12) return 0;
-  return Math.floor(Math.cbrt(totalEarned / 1e12) * 10);
+  if (totalEarned < ASCEND_THRESHOLD) return 0;
+  return Math.floor(Math.sqrt(totalEarned / ASCEND_THRESHOLD));
 };
 
-export const ASCEND_THRESHOLD = 1e12;
+/** Total earned needed to reach the next whole Dark Matter point above `currentGain`. */
+export const nextDarkMatterThreshold = (currentGain: number) =>
+  Math.pow(currentGain + 1, 2) * ASCEND_THRESHOLD;

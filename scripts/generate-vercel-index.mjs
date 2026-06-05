@@ -1,32 +1,25 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
 const dist = resolve(root, 'dist');
-const client = resolve(dist, 'client');
-const assets = resolve(client, 'assets');
+const assetsDir = resolve(dist, 'client', 'assets');
 const outFile = resolve(dist, 'index.html');
 
-async function main() {
-  const entries = await import('node:fs/promises').then(({ readdir }) => readdir(assets));
-  const jsFiles = entries.filter((name) => /^index-.*\.js$/.test(name));
-  const cssFiles = entries.filter((name) => /^styles-.*\.css$/.test(name));
+function findFirstMatching(files, pattern) {
+  return files.find((name) => pattern.test(name)) ?? null;
+}
 
-  if (jsFiles.length === 0) {
-    throw new Error(`No JS entry found in ${assets}`);
+async function main() {
+  const files = await readdir(assetsDir);
+  const jsEntry = findFirstMatching(files, /^index-.*\.js$/);
+  const cssEntry = findFirstMatching(files, /^styles-.*\.css$/);
+
+  if (!jsEntry) {
+    throw new Error(`Could not find client entry bundle in ${assetsDir}`);
   }
 
-  const reads = await Promise.all(jsFiles.map(async (name) => {
-    const file = resolve(assets, name);
-    const content = await readFile(file, 'utf8');
-    return { name, content };
-  }));
-
-  const entry = reads.find(({ content }) => content.includes('from"./index-'))?.name ?? jsFiles[0];
-  const cssLinks = cssFiles
-    .map((name) => `    <link rel="stylesheet" href="./client/assets/${name}" />`)
-    .join('\n');
-
+  const cssLink = cssEntry ? `    <link rel="stylesheet" href="./client/assets/${cssEntry}" />\n` : '';
   const html = `<!doctype html>
 <html lang="en">
   <head>
@@ -34,18 +27,19 @@ async function main() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#050816" />
     <meta name="description" content="Cosmic Crunch - Idle Stardust Clicker" />
-${cssLinks}
+${cssLink}    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Cosmic Crunch</title>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./client/assets/${entry}"></script>
+    <script type="module" src="./client/assets/${jsEntry}"></script>
   </body>
 </html>
 `;
 
   await mkdir(dist, { recursive: true });
-  await writeFile(outFile, html);
+  await writeFile(outFile, html, 'utf8');
 }
 
 main().catch((error) => {

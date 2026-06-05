@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { Component, useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -132,10 +132,47 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <Toaster position="top-center" />
+        <AppErrorBoundary>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+          <Toaster position="top-center" />
+        </AppErrorBoundary>
       </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('[cosmic-crunch] Uncaught UI error:', error);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="glass-panel max-w-md rounded-2xl border border-white/10 p-6 text-center">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            Cosmic Crunch hit a UI error
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The game should still be recoverable. Reload the page to continue.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-5 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Reload game
+          </button>
+        </div>
+      </div>
+    );
+  }
 }

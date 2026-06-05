@@ -45,12 +45,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+      <div className="glass-panel max-w-md rounded-2xl border border-white/10 p-6 text-center">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Cosmic Crunch crashed</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Something went wrong on our end.</p>
+        <p className="mt-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-left text-xs text-[color:var(--nebula-pink)]">
+          {error.message || 'Unknown error'}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -60,13 +59,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
+            Reset
           </button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Go home
+            Reload
           </a>
         </div>
       </div>
@@ -75,6 +74,17 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  shellComponent: ({ children }) => (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  ),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -106,28 +116,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "apple-touch-icon", href: "/icons/icon-192.png" },
     ],
   }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
 
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
-
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    console.error("[cosmic-crunch] Root route mounted");
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -142,11 +141,14 @@ function RootComponent() {
   );
 }
 
-class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  state = { hasError: false };
+class AppErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; message: string }
+> {
+  state = { hasError: false, message: '' };
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: error.message || 'Unknown error' };
   }
 
   componentDidCatch(error: Error) {
@@ -159,18 +161,30 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: bo
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="glass-panel max-w-md rounded-2xl border border-white/10 p-6 text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Cosmic Crunch hit a UI error
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Cosmic Crunch crashed</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            The game should still be recoverable. Reload the page to continue.
+            The game should still be recoverable.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-5 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Reload game
-          </button>
+          <p className="mt-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-left text-xs text-[color:var(--nebula-pink)]">
+            {this.state.message}
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, message: "" });
+                window.location.reload();
+              }}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Reset
+            </button>
+            <a
+              href="/"
+              className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              Reload
+            </a>
+          </div>
         </div>
       </div>
     );

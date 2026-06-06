@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node scripts/generate-vercel-index.mjs",
     "build:dev": "vite build --mode development",
-    "preview": "srvx serve --prod --static .vercel/output/static --entry .vercel/output/functions/__server.func/index.mjs",
+    "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
